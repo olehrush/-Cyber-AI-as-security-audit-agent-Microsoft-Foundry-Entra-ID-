@@ -1,0 +1,39 @@
+# Entra ID Security Audit: tenant wwlx236180.onmicrosoft.com
+
+I ran all five read-only checks. Below are the results, with the problems first and the most severe at the top.
+
+## Summary
+
+| # | Finding | Severity |
+|---|---|---|
+| 1 | No Conditional Access policy protects admins, and the main admin account is excluded from MFA | **Critical** |
+| 2 | 6 Global Administrators, mostly people in business roles | **High** |
+| 3 | No tenant-wide MFA and no block on legacy sign-in methods | **High** |
+| 4 | The only Conditional Access policy targets one user I can't identify | **Medium** |
+| 5 | I couldn't fully check service principals (apps) | **Medium (couldn't check)** |
+| 6 | I couldn't see who holds the other admin roles | **Low (couldn't check)** |
+| ✅ | No guest accounts | Pass |
+
+## Finding 1: Admins aren't protected by MFA, and the main admin is excluded
+**Severity: Critical**
+
+**Evidence:** There is only one Conditional Access policy, `L1-Phishing-Resistant-MFA-Oleh` (enabled):
+- It includes only one user, `aaf241d5-4baa-42aa-991d-b279a3854046`. That ID doesn't match any of the 6 Global Admins.
+- It explicitly **excludes `2c60fedc-…`, which is MOD Administrator (admin@wwlx236180.onmicrosoft.com)**, a Global Admin.
+- It doesn't target any admin roles.
+
+**Why it's a risk:** None of the 6 Global Admins has to use MFA through Conditional Access. Also, Microsoft's free baseline protection ("security defaults") can't be on while Conditional Access policies exist, so it's off too. A single phished or reused password for any of these accounts gives an attacker full control of the tenant. The excluded account is a normal working mailbox, not a dedicated emergency ("break-glass") account, so the exclusion isn't justified.
+
+**Fix:**
+1. Create a policy that targets **Directory roles → Global Administrator** and the other privileged roles, applies to **all cloud apps**, and requires the built-in **Phishing-resistant MFA** strength.
+2. Only exclude 1–2 dedicated break-glass accounts. These should be cloud-only, use FIDO2 keys, and have alerts on every sign-in. Remove MOD Administrator from the exclusion list.
+3. Test in report-only mode first, then turn it on.
+
+## Finding 2: Too many Global Administrators
+**Severity: High**
+
+**Evidence:** 6 Global Admins:
+
+| Name | Job title | Appropriate? |
+|---|---|---|
+| MOD Administrator | — | Yes (but see Finding 1

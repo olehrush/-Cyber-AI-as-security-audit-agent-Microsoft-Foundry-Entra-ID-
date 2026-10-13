@@ -1,0 +1,77 @@
+# Entra ID Security Audit: wwlx236180.onmicrosoft.com
+
+All findings come from live read-only queries: Global Admins, guests, Conditional Access, service principals, directory roles and privileged owners.
+
+## Summary
+
+| # | Finding | Severity |
+|---|---|---|
+| 1 | A user who isn't a Global Admin owns a service principal that holds **Privileged Authentication Administrator**. This can lead to a full tenant takeover. | **Critical** |
+| 2 | There are 7 Global Admins, and several are non-IT business users | **High** |
+| 3 | No Conditional Access policy protects admins. The only policy covers one user and excludes the main admin. | **High** |
+| 4 | An "EntraGoat" lab admin account holds Global Admin | **Medium** (High in production) |
+| 5 | No guest users | Pass |
+
+---
+
+## Finding 1: Escalation through service principal ownership. Critical
+
+- **Path:** `david.martinez@wwlx236180.onmicrosoft.com` → owns the service principal **Finance Analytics Dashboard** (appId `cfc8cae1-fe4a-4361-a5bf-bdd6312f196c`) → which holds **Privileged Authentication Administrator**.
+- **Why it matters:**
+  - An owner can add a client secret or certificate to the service principal and then sign in as it. No admin role is needed for this.
+  - Privileged Authentication Administrator can reset passwords and MFA methods for **any** user, including Global Admins. So David, or anyone who compromises his account, can take over a Global Admin and the whole tenant.
+  - Sign-ins by the service principal also skip user MFA and the user Conditional Access policy.
+  - David is not on the Global Admin list. I had no tool to list his other role assignments, so I can't say whether he has other roles. Either way, this path gives him more privilege than he'd normally have.
+- **Fix:**
+  1. Remove David as an owner of the service principal and its app registration. Ownership should sit with a small, controlled group of admins.
+  2. Remove Privileged Authentication Administrator from the service principal. A finance dashboard almost certainly only needs scoped Graph read permissions.
+  3. Check the service principal's credentials and sign-in logs. Revoke any client secrets or certificates you don't recognise, especially recent ones.
+  4. Check the audit logs for password or MFA resets done by this service principal.
+  5. Long term: use role-assignable groups and PIM (Privileged Identity Management), and never give standing privileged roles to service principals owned by regular users.
+
+## Finding 2: Too many Global Admins, including business users. High
+
+These 7 accounts hold Global Admin:
+
+| User | Job title | Concern |
+|---|---|---|
+| MOD Administrator (admin@) | — | Possibly the break-glass account. Confirm. |
+| Allan Deyoung | IT Admin | Plausible |
+| Nestor Wilke | Director | Non-IT |
+| Isaiah Langer | Sales Rep | Non-IT |
+| Megan Bowen | Marketing Manager | Non-IT |
+| Lidia Holloway | Product Manager | Non-IT |
+| EntraGoat Administrator S1 | System Administrator | Lab artifact (see Finding 4) |
+
+- **Why it matters:** Microsoft recommends fewer than 5 Global Admins. Business users get targeted by phishing and don't need tenant-wide control, so each extra Global Admin makes the tenant easier to take over.
+- **Fix:** Remove Global Admin from Isaiah, Megan, Lidia and Nestor, and give them least-privilege roles only if they need any. Make the remaining admins eligible through PIM instead of permanently active. Keep 2 break-glass accounts that are excluded from policies and monitored.
+
+## Finding 3: Conditional Access doesn't protect admins. High
+
+- **What I found:**
+  - There is only one policy, `L1-Phishing-Resistant-MFA-Oleh`.
+  - It applies to one user ID (`aaf241d5-…`) and only to Office 365.
+  - It explicitly **excludes MOD Administrator**.
+  - No policy targets admin roles, all users, or legacy authentication.
+- **Why it matters:** None of the 7 Global Admins, or the Privileged Authentication Administrator role, is required by Conditional Access to use MFA. One stolen password could compromise the tenant.
+- **Fix:**
+  - Create a policy that targets **directory roles** (Global Admin, Privileged Authentication Administrator, Privileged Role Administrator and others) for all cloud apps, with phishing-resistant authentication strength.
+  - Add a policy requiring MFA for all users, and block legacy authentication.
+  - Only exclude MOD Administrator if it really is a monitored break-glass account.
+  - Add a workload identity policy for service principals, such as location restrictions.
+
+## Finding 4: EntraGoat lab admin has Global Admin. Medium
+
+- **Why it matters:** EntraGoat is a deliberately vulnerable training framework. Its leftover accounts and apps are often intentionally misconfigured, and Finding 1 matches a typical EntraGoat scenario.
+- **Fix:** When the lab exercise is over, run the EntraGoat cleanup scripts, or delete `EntraGoat-admin-s1` and the related objects (David Martinez and the Finance Analytics Dashboard app).
+
+## Finding 5: Guest users. Pass
+There are no guest accounts.
+
+---
+
+## Limits of this audit
+- The service principal list came back truncated. Two apps are worth checking for Graph permissions: **ME-SecurityScanner** and **entra-audit-agent**.
+- None of the tools return members of other privileged roles (Exchange Administrator, Privileged Authentication Administrator, Device Local Admin), MFA registration status, or app permission grants. Checking these is the next step.
+
+**Priority:** Fix Finding 1 first, today. Then tighten Conditional Access for admins (Finding 3) and reduce the number of Global Admins (Finding 2).
