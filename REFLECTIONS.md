@@ -4,7 +4,7 @@
 
 ## What worked
 - A tool-calling loop where Claude decides *when* to query Graph, with strictly read-only tools, produced a clear, prioritised audit — and in the end the agent autonomously found the EntraGoat Scenario 1 escalation path (a non-admin user owning a service principal that holds Privileged Authentication Administrator).
-- Separating "brain" (Foundry/Claude in the Cybersteps tenant) from "target" (Graph in the Pearson lab tenant) kept the design clean: the two tenants never talk directly; a local Python bridge talks to each independently.
+- Separating "brain" (Foundry/Claude in the Cybersteps tenant) from "target" (Graph in the Pearson lab tenant) kept the design clean: the two tenants never talk directly; a local Python bridge talks to each independently.However, in order to test something you need to modify the scripts, ideally (and there was a longer workaround to implement this) would be ability to chat directly with Agent and get security scan results via typical prompt and direct communications with Agent.
 
 ## Difficulties
 0. **Navigating Entra Goat** I only managed to solve 1 Entra Goat scenario as implementation was a bit of challenging and confusing. It was not very clear how to solve them (via web which was buggy and not working all the time or via Terminal). There was not much info about this part, would be nice to include more walk-through about this project part.
